@@ -114,10 +114,18 @@ int main( int argc, char** argv)
     checkCudaErrors(cudaMalloc((void**)&d_ed_list,num_e*sizeof(edge)));
     checkCudaErrors(cudaMemcpy(d_ed_list,ed_list,num_e*sizeof(edge),cudaMemcpyHostToDevice));
 
-    int * is_tree;
-    checkCudaErrors(cudaMalloc((void**)&is_tree,num_e*sizeof(int)));
+    int * is_tree, *d_is_tree;
+    checkCudaErrors(cudaMalloc((void**)&d_is_tree,num_e*sizeof(int)));
+    checkCudaErrors(cudaMemset(d_is_tree, 0, num_e * sizeof(int)));
+    
+    compute(num_n, num_e, d_ed_list, d_is_tree);
 
-    compute(num_n, num_e, d_ed_list, is_tree);
+    is_tree=(int*)calloc(num_e,sizeof(int));
+    checkCudaErrors(cudaMemcpy(is_tree,d_is_tree,num_e*sizeof(int),cudaMemcpyDeviceToHost));
+
+    for (int i = 0; i < num_e; ++i) {
+        printf("%d\n", is_tree[i]);
+    } 
 
     return 0;
 }

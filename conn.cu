@@ -50,7 +50,7 @@ namespace cc {
  */
 
 __global__ 
-void select_winner_init(int* an,edge *ed_list,int num_e,int num_n,int*flag,char*mark){
+void select_winner_init(int* an,edge *ed_list,int num_e,int num_n,int*flag,char*mark,int*win_edge){
     int a,b,x,y,mn,mx;
     long long int t;
     a=blockIdx.y*gridDim.x+blockIdx.x;
@@ -63,9 +63,34 @@ void select_winner_init(int* an,edge *ed_list,int num_e,int num_n,int*flag,char*
 
         mx=x>y?x:y;
         mn=x+y-mx;
-        an[mx]=mn;
+        // an[mx]=mn;
+        win_edge[mx]=a;
     }
     return;
+}
+
+__global__ void select_tree_edges_and_merge_init(int *an, edge *ed_list,
+                                            int num_e, int num_n, int *flag,
+                                            char *mark, int *win_edge, int *is_tree) {
+    int a, b, x, y, a_x, a_y, mn, mx;
+    long long int t;
+    a = blockIdx.y * gridDim.x + blockIdx.x;
+    b = threadIdx.x;
+    a = a * 512 + b;
+
+    if (a < num_n) {
+        if (win_edge[a] != -1) {
+            is_tree[win_edge[a]] = 1;
+
+            t=ed_list[win_edge[a]].x;
+            x=(int)t & 0xFFFFFFFF;
+            y=(int)(t>>32);
+
+            mx=x>y?x:y;
+            mn=x+y-mx;
+            an[mx]=mn;
+        }
+    }
 }
 
 /*
@@ -78,7 +103,7 @@ void select_winner_init(int* an,edge *ed_list,int num_e,int num_n,int*flag,char*
 
 
 __global__ 
-void select_winner2(int* an,edge *ed_list,int num_e,int num_n,int*flag,char*mark){
+void select_winner2(int* an,edge *ed_list,int num_e,int num_n,int*flag,char*mark,int*win_edge){
     int a,b,x,y,a_x,a_y,mn,mx;
     long long int t;
     a=blockIdx.y*gridDim.x+blockIdx.x;
@@ -102,7 +127,8 @@ void select_winner2(int* an,edge *ed_list,int num_e,int num_n,int*flag,char*mark
                 mark[a]=-1;
             }
             else{
-                an[mn]=mx;
+                // an[mn]=mx;
+                win_edge[mn]=a;
                 s_flag=1;
             }
         }
@@ -116,6 +142,32 @@ void select_winner2(int* an,edge *ed_list,int num_e,int num_n,int*flag,char*mark
     return;
 }
 
+__global__ void select_tree_edges_and_merge2(int *an, edge *ed_list,
+                                            int num_e, int num_n, int *flag,
+                                            char *mark, int *win_edge, int *is_tree) {
+    int a, b, x, y, a_x, a_y, mn, mx;
+    long long int t;
+    a = blockIdx.y * gridDim.x + blockIdx.x;
+    b = threadIdx.x;
+    a = a * 512 + b;
+
+    if (a < num_n) {
+        if (win_edge[a] != -1) {
+            is_tree[win_edge[a]] = 1;
+
+            t = ed_list[win_edge[a]].x;
+            x = (int)t & 0xFFFFFFFF;
+            y = (int)(t >> 32);
+
+            a_x = an[x];
+            a_y = an[y];
+            mx = a_x > a_y ? a_x : a_y;
+            mn = a_x + a_y - mx;
+
+            an[mn] = mx;
+        }
+    }
+}
 
 /*
    Function to hook from lower valued to higher valued trees. 
@@ -124,7 +176,7 @@ void select_winner2(int* an,edge *ed_list,int num_e,int num_n,int*flag,char*mark
 
  */   
 __global__ 
-void select_winner(int* an,edge *ed_list,int num_e,int num_n,int*flag,char*mark){
+void select_winner(int* an,edge *ed_list,int num_e,int num_n,int*flag,char*mark,int*win_edge){
     int a,b,x,y,a_x,a_y,mn,mx;
     long long int t;
     a=blockIdx.y*gridDim.x+blockIdx.x;
@@ -148,7 +200,8 @@ void select_winner(int* an,edge *ed_list,int num_e,int num_n,int*flag,char*mark)
                 mark[a]=-1;
             }
             else{
-                an[mx]=mn;
+                // an[mx]=mn;
+                win_edge[mx]=a;
                 s_flag=1;
             }
         }
@@ -162,8 +215,32 @@ void select_winner(int* an,edge *ed_list,int num_e,int num_n,int*flag,char*mark)
     return;
 }
 
+__global__ void select_tree_edges_and_merge(int *an, edge *ed_list,
+                                            int num_e, int num_n, int *flag,
+                                            char *mark, int *win_edge, int *is_tree) {
+    int a, b, x, y, a_x, a_y, mn, mx;
+    long long int t;
+    a = blockIdx.y * gridDim.x + blockIdx.x;
+    b = threadIdx.x;
+    a = a * 512 + b;
 
+    if (a < num_n) {
+        if (win_edge[a] != -1) {
+            is_tree[win_edge[a]] = 1;
 
+            t = ed_list[win_edge[a]].x;
+            x = (int)t & 0xFFFFFFFF;
+            y = (int)(t >> 32);
+
+            a_x = an[x];
+            a_y = an[y];
+            mx = a_x > a_y ? a_x : a_y;
+            mn = a_x + a_y - mx;
+
+            an[mx] = mn;
+        }
+    }
+}
 
 __global__ 
 void p_jump(int num_n,int* an,int *flag){
@@ -302,7 +379,7 @@ void update_mask(char *mask,int n,int *an){
     return;
 }
 
-void compute(int const num_n, int const num_e, edge *d_ed_list, int * is_tree) 
+void compute(int const num_n, int const num_e, edge *d_ed_list, int * d_is_tree) 
 {
     // findCudaDevice(argc,(const char**) argv);
 
@@ -342,7 +419,10 @@ void compute(int const num_n, int const num_e, edge *d_ed_list, int * is_tree)
     checkCudaErrors(cudaMalloc((void**)&d_flag,sizeof(int)));
     // checkCudaErrors(cudaMemcpy(d_ed_list,ed_list,num_e*sizeof(edge),cudaMemcpyHostToDevice));
 
-    
+    int *d_win_edge;
+    checkCudaErrors(cudaMalloc((void**)&d_win_edge,num_n*sizeof(int)));
+    checkCudaErrors(cudaMemset(d_win_edge, -1, num_n * sizeof(int)));
+        
 
     //   Finished intializing space for the program, ideally timing should be from here.
 
@@ -360,9 +440,13 @@ void compute(int const num_n, int const num_e, edge *d_ed_list, int * is_tree)
     //First round of select winner
 
 
-    select_winner_init<<< grid_e,threads>>>(d_an,d_ed_list,num_e,num_n,d_flag,d_mark);
+    select_winner_init<<< grid_e,threads>>>(d_an,d_ed_list,num_e,num_n,d_flag,d_mark,d_win_edge);
     cudaThreadSynchronize();
 
+    select_tree_edges_and_merge_init<<<grid_n, threads>>>(
+        d_an, d_ed_list, num_e, num_n, d_flag, d_mark, d_win_edge, d_is_tree);
+    
+    cudaThreadSynchronize();
 
 //    CUT_CHECK_ERROR("Kernel execution failed");
 
@@ -382,16 +466,28 @@ void compute(int const num_n, int const num_e, edge *d_ed_list, int * is_tree)
     update_mask<<< grid_n,threads>>>(mask,num_n,d_an);
     int lpc=1;
     do{
+        checkCudaErrors(cudaMemset(d_win_edge, -1, num_n * sizeof(int)));
+    
         flag=0;				
         checkCudaErrors(cudaMemcpy(d_flag,&flag,sizeof(int),cudaMemcpyHostToDevice));
         if(lpc!=0){
-            select_winner<<< grid_e,threads>>>(d_an,d_ed_list,num_e,num_n,d_flag,d_mark);
+            select_winner<<< grid_e,threads>>>(d_an,d_ed_list,num_e,num_n,d_flag,d_mark,d_win_edge);
+            cudaThreadSynchronize();
+
+            select_tree_edges_and_merge<<<grid_n, threads>>>(
+                d_an, d_ed_list, num_e, num_n, d_flag, d_mark, d_win_edge, d_is_tree);
+
             lpc++;
             lpc=lpc%4;
         }
         else{
 
-            select_winner2<<< grid_e,threads>>>(d_an,d_ed_list,num_e,num_n,d_flag,d_mark);
+            select_winner2<<< grid_e,threads>>>(d_an,d_ed_list,num_e,num_n,d_flag,d_mark,d_win_edge);
+            cudaThreadSynchronize();
+
+            select_tree_edges_and_merge2<<<grid_n, threads>>>(
+                d_an, d_ed_list, num_e, num_n, d_flag, d_mark, d_win_edge, d_is_tree);
+
             lpc=0;
         }
         cudaThreadSynchronize();
