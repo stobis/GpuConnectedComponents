@@ -1,4 +1,4 @@
-CUDA_PATH       ?= /usr/local/cuda-9.0
+CUDA_PATH       ?= /usr/local/cuda
 CUDA_INC_PATH   ?= $(CUDA_PATH)/include
 CUDA_BIN_PATH   ?= $(CUDA_PATH)/bin
 CUDA_LIB_PATH  ?= $(CUDA_PATH)/lib64
@@ -6,10 +6,10 @@ CUDA_LIB_PATH  ?= $(CUDA_PATH)/lib64
 NVCC            ?= $(CUDA_BIN_PATH)/nvcc
 GCC             ?= g++
 
-GENCODE_SM50    := -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50
+GENCODE_SM50    := -gencode arch=compute_30,code=sm_30 -gencode arch=compute_30,code=sm_30
 GENCODE_FLAGS   := $(GENCODE_SM50)
 
-LDFLAGS   := -L$(CUDA_LIB_PATH) 
+LDFLAGS   := -L$(CUDA_LIB_PATH) -lcudart
 CCFLAGS   := -m64
 
 NVCCFLAGS := -m64 -x cu 
@@ -23,14 +23,17 @@ build: exec
 
 
 
-conn.o: runner.cpp
+conn.o: conn.cu
 	$(NVCC) $(NVCCFLAGS) $(EXTRA_NVCCFLAGS) $(GENCODE_FLAGS) $(INCLUDES) -o $@ -c $<
 	
-exec: runner.cpp 
-	$(NVCC) $(NVCCFLAGS) $(INCLUDES) -o $@ $+ $(LDFLAGS) $(EXTRA_LDFLAGS)
+runner.o: runner.cpp
+	$(NVCC) $(NVCCFLAGS) $(EXTRA_NVCCFLAGS) $(GENCODE_FLAGS) $(INCLUDES) -o $@ -c $<
+
+exec: conn.o runner.o
+	$(GCC) $(CCFLAGS) $(INCLUDES) $^ -o $@ $(LDFLAGS) $(EXTRA_LDFLAGS)
 
 run: build
 	./exec
 
 clean:
-	rm -f exec conn.o *.bin
+	rm -f exec *.o *.bin
